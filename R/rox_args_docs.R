@@ -29,17 +29,6 @@ NULL
 #' @keywords internal
 NULL
 
-#' scale_sm_FWHM
-#' 
-#' @param scale_sm_FWHM Only applies if \code{scale=="local"} and if \code{BOLD}
-#'  represents surface data. To smooth the standard deviation estimates used for
-#'  local scaling, provide the smoothing FWHM (default: \code{2}). As the FWHM
-#'  becomes large, local scaling approaches global scaling. 
-#' 
-#' @name scale_sm_FWHM_Param
-#' @keywords internal
-NULL
-
 #' scale
 #' 
 #' @param scale \code{"global"} (default), \code{"local"}, or \code{"none"}.
@@ -53,8 +42,9 @@ NULL
 
 #' center_Bcols
 #' 
-#' @param center_Bcols Center BOLD across columns (each image)? Default: 
-#'  \code{FALSE} (not recommended).
+#' @param center_Bcols Center BOLD across columns (each image)? This
+#'  is equivalent to performing global signal regression. Default: 
+#'  \code{FALSE}. 
 #' 
 #' @name center_Bcols_Param
 #' @keywords internal

@@ -7,9 +7,12 @@
 dual_reg2(
   BOLD,
   BOLD2 = NULL,
-  format = c("CIFTI", "xifti", "NIFTI", "nifti", "data"),
+  format = c("CIFTI", "xifti", "GIFTI", "gifti", "NIFTI", "nifti", "RDS", "data"),
   GICA,
+  keepA = FALSE,
   scale = c("global", "local", "none"),
+  scale_sm_surfL = NULL,
+  scale_sm_surfR = NULL,
   scale_sm_FWHM = 2,
   detrend_DCT = 0,
   center_Bcols = FALSE,
@@ -43,21 +46,37 @@ of the following: a \code{"CIFTI"} file path, a \code{"xifti"} object, a
 \item{GICA}{Group ICA maps as a (vectorized) numeric matrix
 (\eqn{V \times Q}). Its columns will be centered.}
 
+\item{keepA}{Keep the resulting \strong{A} matrices, or only return the \strong{S} matrices
+(default)?}
+
 \item{scale}{\code{"global"} (default), \code{"local"}, or \code{"none"}.
 Global scaling will divide the entire data matrix by the mean image standard
 deviation (\code{mean(sqrt(rowVars(BOLD)))}). Local scaling will divide each
 data location's time series by its estimated standard deviation.}
 
-\item{scale_sm_FWHM}{Only applies if \code{scale=="local"} and if \code{BOLD}
-represents surface data. To smooth the standard deviation estimates used for
-local scaling, provide the smoothing FWHM (default: \code{2}). As the FWHM
-becomes large, local scaling approaches global scaling.}
+\item{scale_sm_surfL, scale_sm_surfR, scale_sm_FWHM}{Only applies if
+\code{scale=="local"} and \code{BOLD} represents CIFTI-format data. To
+smooth the standard deviation estimates used for local scaling, provide the
+surface geometries along which to smooth as GIFTI geometry files or
+\code{"surf"} objects, as well as the smoothing FWHM (default: \code{2}).
+
+If \code{scale_sm_FWHM==0}, no smoothing of the local standard deviation
+estimates will be performed.
+
+If \code{scale_sm_FWHM>0} but \code{scale_sm_surfL} and
+\code{scale_sm_surfR} are not provided, the default inflated surfaces from
+the HCP will be used.
+
+To create a \code{"surf"} object from data, see
+\code{\link[ciftiTools]{make_surf}}. The surfaces must be in the same
+resolution as the \code{BOLD} data.}
 
 \item{detrend_DCT}{Detrend the data? This is an integer number of DCT bases
 to use for detrending. If \code{0} (default), do not detrend.}
 
-\item{center_Bcols}{Center BOLD across columns (each image)? Default:
-\code{FALSE} (not recommended).}
+\item{center_Bcols}{Center BOLD across columns (each image)? This
+is equivalent to performing global signal regression. Default:
+\code{FALSE}.}
 
 \item{normA}{Scale each IC timeseries (column of \eqn{A}) in the dual
 regression estimates? Default: \code{FALSE} (not recommended). Note that the
@@ -108,7 +127,8 @@ the intersection of the masks is used.}
 \item{verbose}{Display progress updates? Default: \code{TRUE}.}
 }
 \value{
-The dual regression \strong{S} matrices, or \code{NULL} if dual
+The dual regression \strong{S} matrices, or both the \strong{S}
+and \strong{A} matrices if \code{keepA}, or \code{NULL} if dual
 regression was skipped due to too many masked data locations.
 }
 \description{
