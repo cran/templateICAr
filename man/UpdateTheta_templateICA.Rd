@@ -13,6 +13,8 @@ UpdateTheta_templateICA.spatial(
   BOLD,
   theta,
   C_diag,
+  H,
+  Hinv,
   s0_vec,
   D,
   Dinv_s0,
@@ -27,7 +29,11 @@ UpdateTheta_templateICA.independent(
   BOLD,
   theta,
   C_diag,
-  verbose
+  H,
+  Hinv,
+  update_nu0sq = TRUE,
+  return_MAP = FALSE,
+  verbose = TRUE
 )
 }
 \arguments{
@@ -45,6 +51,8 @@ objects of class "templateICA_mesh" containing the triangular mesh (see
 
 \item{C_diag}{\eqn{(Qx1)} diagonal elements of residual covariance after dimension reduction}
 
+\item{H, Hinv}{For dimension reduction}
+
 \item{s0_vec}{Vectorized template means}
 
 \item{D}{Sparse diagonal matrix of template standard deviations}
@@ -57,9 +65,13 @@ objects of class "templateICA_mesh" containing the triangular mesh (see
 the latent fields instead of the parameter estimates. Default: \code{FALSE}.}
 
 \item{update}{Which parameters to update. Either \code{"all"}, \code{"A"} or \code{"kappa"}.}
+
+\item{update_nu0sq}{For non-spatial model: updating \code{nu0sq} is recommended
+if dimension reduction was not performed, and is not recommended if it was.}
 }
 \value{
-An updated list of parameter estimates, theta, OR if return_MAP=TRUE, the posterior mean and precision of the latent fields
+An updated list of parameter estimates, theta, OR if
+\code{return_MAP=TRUE}, the posterior mean and precision of the latent fields
 }
 \description{
 Parameter Estimates in EM Algorithm for Template ICA Model

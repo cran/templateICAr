@@ -1,6 +1,7 @@
 #define EIGEN_PERMANENTLY_DISABLE_STUPID_WARNINGS
 #include <Rcpp.h>
 #include <RcppEigen.h>
+//#include <omp.h>
 
 using namespace Rcpp;
 using namespace Eigen;
@@ -51,30 +52,33 @@ Rcpp::List UpdateTheta_FCtemplateICAcpp(Eigen::MatrixXd template_mean,
   // Eigen::VectorXd A = Eigen::VectorXd (post_sums["A_sum"]);
   // Eigen::MatrixXd AtA = Eigen::MatrixXd (post_sums["AtA_sum"]);
   Eigen::VectorXd alpha_new(nICs);
+  // Eigen::VectorXd alpha_new_old(nICs);
   double nu0 = double (template_FC["nu"]);
   // Eigen::MatrixXd psi0 = Eigen::MatrixXd (template_FC["psi"]);
   // UPDATE TAU^2 (ERROR VARIANCE)
   tau_sq_den = ntime + 2*alpha_tau;
   tau_sq_den += 2;
-  for(int v=0;v < nvox; v++){
+  //#pragma omp parallel for // requires OpenMP via Clang, which would make it difficult for users to install the package
+  for(int v=0; v < nvox; v++){
     tau_sq_num = AS_sq(v) - 2*yAS(v);
     tau_sq_num += Y_sq_sum(v);
     tau_sq_num += 2*beta_tau;
     tau_sq_new(v) = tau_sq_num / tau_sq_den;
     // tau_sq_new(v) = 1/(ntime + 2*alpha_tau + 2) * (AS_sq(v) - 2*yAS(v) + 2*beta_tau);
   }
-  double tau_mean = tau_sq_new.mean();
-  for(int v=0;v<nvox;v++){
-    tau_sq_new(v) = tau_mean;
-  }
+  // double tau_mean = tau_sq_new.mean();
+  //for(int v=0;v<nvox;v++){
+  //  tau_sq_new(v) = tau_mean;
+  // }
   // UPDATE ALPHA (TEMPORAL INTERCEPT)
-  Eigen::MatrixXd alpha_part = Eigen::MatrixXd::Identity(nICs,nICs);
-  Eigen::MatrixXd G_inv = G.inverse();
-  alpha_part /= sigma2_alpha;
-  alpha_part += ntime * G_inv;
-  Eigen::MatrixXd alpha_part_inv = alpha_part.inverse();
-  alpha_part_inv *= G_inv;
-  alpha_new = alpha_part_inv * A;
+  // Eigen::MatrixXd alpha_part = Eigen::MatrixXd::Identity(nICs,nICs);
+  // Eigen::MatrixXd G_inv = G.inverse();
+  // alpha_part /= sigma2_alpha;
+  // alpha_part += ntime * G_inv;
+  // Eigen::MatrixXd alpha_part_inv = alpha_part.inverse();
+  // alpha_part_inv *= G_inv;
+  // alpha_new_old = alpha_part_inv * A;
+  alpha_new = A / ntime;
   // UPDATE G (TEMPORAL COVARIANCE, I.E. FUNCTIONAL CONNECTIVITY)
   Eigen::MatrixXd alpha_alpha_t = alpha_new * alpha_new.transpose();
   Eigen::MatrixXd tmp = AtA - 2 * A * alpha_new.transpose() + ntime*alpha_alpha_t + psi0;
@@ -82,9 +86,11 @@ Rcpp::List UpdateTheta_FCtemplateICAcpp(Eigen::MatrixXd template_mean,
   // RETURN NEW PARAMETER ESTIMATES
   Rcpp::NumericVector tau_sq_newX(wrap(tau_sq_new));
   Rcpp::NumericVector alpha_newX(wrap(alpha_new));
+  // Rcpp::NumericVector alpha_new_oldX(wrap(alpha_new_old));
   Rcpp::NumericMatrix G_newX(wrap(G_new));
   return Rcpp::List::create(Rcpp::Named("tau_sq") = tau_sq_newX,
                             Rcpp::Named("alpha") = alpha_newX,
+                            // Rcpp::Named("alpha_old") = alpha_new_oldX,
                             Rcpp::Named("G") = G_newX);
 }
 
@@ -171,20 +177,35 @@ Rcpp::List Gibbs_AS_posteriorCPP(const int nsamp, const int nburn,
   // Start the Gibbs sampler
   for(int i=0;i < niter; i++) {
     // Update A
-    SGti = S.transpose() * G_tau_inv;
-    sig_inv_A = SGti * S;
-    sig_inv_A += G_inv;
-    chol_sig_inv_A.compute(sig_inv_A);
-    chol_sig_A = chol_sig_inv_A.matrixL().toDenseMatrix().inverse();
-    YGS = YtG_tau_inv * S;
+    SGti = S.transpose() * G_tau_inv; // Calculate the product of the transpose of S and G_tau_inv and assign it to SGti
+    sig_inv_A = SGti * S; // Calculate the product of SGti and S and assign it to sig_inv_A
+    sig_inv_A += G_inv; // Add G_inv to complete calculation of sig_inv_A
+    chol_sig_inv_A.compute(sig_inv_A); // Perform a Cholesky decomposition on sig_inv_A = LL'
+    chol_sig_A = chol_sig_inv_A.matrixL().toDenseMatrix().inverse(); // Calculate L^-1, the inverse of the lower triangular matrix obtained from Cholesky decomposition
+    YGS = YtG_tau_inv * S; // Begin calculation of mu_A_t: Calculate the product of YtG_tau_inv and S and assign it to YGS
     for(int t = 0;t < ntime; t++) {
-      ygs_alphaGinv = YGS.row(t) + alphaGinv.transpose();
-      mu_at = chol_sig_inv_A.solve(ygs_alphaGinv);
-      Z = rnorm(Q);
-      Eigen::Map<Eigen::VectorXd> ZZ = as<Eigen::Map<Eigen::VectorXd> >(Z);
-      At = chol_sig_A * ZZ;
-      At += mu_at;
-      A.row(t) = At;
+      ygs_alphaGinv = YGS.row(t) + alphaGinv.transpose(); // Add the transpose of alphaGinv to YGS(t,) and assign it to ygs_alphaGinv
+      mu_at = chol_sig_inv_A.solve(ygs_alphaGinv); // Calculate mu_at: Solve the linear system sig_inv_A * x = ygs_alphaGinv using the Cholesky decomposition of sig_inv_A
+      Z = rnorm(Q);  // Generate a Q-dimensional N(0,I) random vector
+      Eigen::Map<Eigen::VectorXd> ZZ = as<Eigen::Map<Eigen::VectorXd> >(Z); // Map the vector Z to an Eigen VectorXd object named ZZ
+      At = chol_sig_A * ZZ;  // Multiply chol_sig_A by ZZ to make the covariance sig_A
+      At += mu_at;  // Add mu_at to make the mean mu_at
+      A.row(t) = At; // Save result in A(t,)
+    }
+    // Enforcing columnwise centering and variance = 1
+    for(int q = 0;q < Q;q++) {
+      double AcolMean = A.col(q).mean();
+      double ssAcol = 0.0;
+      for(int t=0;t<ntime;t++) {
+        A(t,q) = A(t,q) - AcolMean; // centering
+        ssAcol += std::pow(A(t,q),2.0); // finding the sums of squares
+      }
+      double varAcol = ssAcol / (ntime - 1.0); // calculating the variance
+      // Rcout << "Variance for column q = " << q << " = " << varAcol << std::endl;
+      double sdAcol = std::pow(varAcol, 0.5); // calculating the SD
+      for(int t=0;t<ntime;t++) {
+        A(t,q) = A(t,q) / sdAcol; // scaling
+      }
     }
     // Update S
     AtA = A.transpose() * A;

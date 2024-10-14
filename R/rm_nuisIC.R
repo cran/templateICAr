@@ -50,7 +50,8 @@ Q2_max_check <- function(Q2_max, nQ, nT){
 #'  subtracted from it. If \code{return_Q2}, a list of length two: the second 
 #'  entry will be \code{Q2}.
 #' 
-#' @importFrom fMRItools colCenter
+#' @importFrom pesel pesel
+#' @importFrom fMRItools colCenter dual_reg
 #' @keywords internal 
 rm_nuisIC <- function(BOLD, DR=NULL, template_mean=NULL, Q2=NULL, Q2_max=NULL, 
   checkRowCenter=TRUE, verbose=FALSE, return_Q2=FALSE){
@@ -92,7 +93,7 @@ rm_nuisIC <- function(BOLD, DR=NULL, template_mean=NULL, Q2=NULL, Q2_max=NULL,
   #   here, we consider n=V (vertices) and p=T (timepoints). (it will use n-asymptotic framework)
   if (is.null(Q2)) {
     if(verbose) cat(paste0('Estimating number of nuisance components... '))
-    Q2 <- suppressWarnings(pesel(BOLD2, npc.max=Q2_max, method='homogenous')$nPCs) #estimated number of nuisance ICs
+    Q2 <- suppressWarnings(pesel::pesel(BOLD2, npc.max=Q2_max, method='homogenous')$nPCs) #estimated number of nuisance ICs
     if(verbose) cat(paste0(Q2,'\n'))
   }
 
@@ -117,6 +118,7 @@ rm_nuisIC <- function(BOLD, DR=NULL, template_mean=NULL, Q2=NULL, Q2_max=NULL,
   #   Y2 * Y2' = U * D^2 * U'
   #   V' = (1/D) * U' * Y2
   #   UDV' = U * U' * Y2
+  if (verbose) { cat('Estimating & subtracting nuisance components.') }
   BOLD2 <- BOLD - (BOLD2 %*% tcrossprod(svd(crossprod(BOLD2), nu=Q2, nv=0)$u))
 
   if (return_Q2) {

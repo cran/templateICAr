@@ -2,7 +2,7 @@
 % Please edit documentation in R/EM_FCtemplateICA.R
 \name{EM_FCtemplateICA}
 \alias{EM_FCtemplateICA}
-\title{EM Algorithm for FC Template ICA Model}
+\title{EM Template ICA}
 \usage{
 EM_FCtemplateICA(
   template_mean,
@@ -12,7 +12,12 @@ EM_FCtemplateICA(
   BOLD,
   AS_0,
   maxiter = 100,
-  epsilon = 0.01,
+  miniter = 3,
+  epsilon = 0.001,
+  Gibbs_nsamp = 1000,
+  Gibbs_nburn = 50,
+  Gibbs_nchain = 10,
+  eps_inter = NULL,
   verbose
 )
 }
@@ -31,20 +36,29 @@ where \eqn{Q} is the number of ICs, \eqn{V=nvox} is the number of data locations
 \item{AS_0}{(list) initial guess at latent variables: A (\eqn{TxQ} mixing matrix),
 and S (\eqn{QxV} matrix of spatial ICs)}
 
-\item{maxiter}{Maximum number of EM iterations. Default: 100.}
+\item{maxiter}{Maximum number of EM iterations. Default: \code{100}.}
 
-\item{epsilon}{Smallest proportion change in parameter estimates between iterations. Default: 0.01.}
+\item{miniter}{Minimum number of EM iterations. Default: \code{3}.}
+
+\item{epsilon}{Smallest proportion change in log-posterior between iterations.
+Default: \code{0.001}.}
+
+\item{Gibbs_nsamp}{the number of Gibbs posterior samples of A and S to output after burn-in}
+
+\item{Gibbs_nburn}{the number of Gibbs posterior samples of A and S to throw away before saving}
+
+\item{Gibbs_nchain}{the number of simultaneous Gibbs chains to run}
+
+\item{eps_inter}{Intermediate values of epsilon at which to save results (used
+to assess benefit of more stringent convergence rules). Default:
+\code{NULL} (do not save). These values should be in decreasing order
+(larger to smaller error) and all values should be between zero and
+\code{epsilon}.}
 
 \item{verbose}{If \code{TRUE}, display progress of algorithm. Default: \code{FALSE}.}
 }
 \value{
-A list:
-theta (list of final parameter estimates),
-subICmean (estimates of subject-level ICs),
-subICvar (variance of subject-level ICs),
-mixing_mean (estimates of subject-level mixing matrix),
-mixing_var (variance of subject-level mixing matrix),
-success (flag indicating convergence (\code{TRUE}) or not (\code{FALSE}))
+A list of computed values, including the final parameter estimates.
 }
 \description{
 EM Algorithm for FC Template ICA Model
@@ -53,3 +67,4 @@ EM Algorithm for FC Template ICA Model
 \code{EM_FCtemplateICA} implements the expectation-maximization
 (EM) algorithm for the functional connectivity (FC) template ICA model
 }
+\keyword{internal}

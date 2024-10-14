@@ -1,108 +1,3 @@
-#' Dual Regression
-#'
-#' @param BOLD Subject-level fMRI data matrix (\eqn{V \times T}). Rows will be
-#'  centered.
-#' @param GICA Group-level independent components (\eqn{V \times Q})
-#' @inheritParams center_Bcols_Param
-#' @inheritParams scale_Param
-#' @param scale_sm_xifti,scale_sm_FWHM Only applies if \code{scale=="local"} and
-#'  \code{BOLD} represents CIFTI-format data. To smooth the standard deviation
-#'  estimates used for local scaling, provide a \code{"xifti"} object with data
-#'  locations in alignment with \code{BOLD}, as well as the smoothing FWHM
-#'  (default: \code{2}). If no \code{"xifti"} object is provided (default), do
-#'  not smooth.
-#' @inheritParams detrend_DCT_Param
-#' @inheritParams normA_Param
-#'
-#' @importFrom fMRItools colCenter
-#' @importFrom matrixStats colVars
-#'
-#' @return A list containing
-#'  the subject-level independent components \strong{S} (\eqn{V \times Q}),
-#'  and subject-level mixing matrix \strong{A} (\eqn{TxQ}).
-#'
-#' @export
-#' @examples
-#' nT <- 30
-#' nV <- 400
-#' nQ <- 7
-#' mU <- matrix(rnorm(nV*nQ), nrow=nV)
-#' mS <- mU %*% diag(seq(nQ, 1)) %*% matrix(rnorm(nQ*nT), nrow=nQ)
-#' BOLD <- mS + rnorm(nV*nT, sd=.05)
-#' GICA <- mU
-#' dual_reg(BOLD=BOLD, GICA=mU, scale="local")
-#'
-dual_reg <- function(
-  BOLD, GICA,
-  scale=c("global", "local", "none"), scale_sm_xifti=NULL, scale_sm_FWHM=2,
-  detrend_DCT=0, center_Bcols=FALSE, normA=FALSE){
-
-  stopifnot(is.matrix(BOLD))
-  stopifnot(is.matrix(GICA))
-  if (is.null(scale) || isFALSE(scale)) { scale <- "none" }
-  if (isTRUE(scale)) {
-    warning(
-      "Setting `scale='global'`. Use `'global'` or `'local'` ",
-      "instead of `TRUE`, which has been deprecated."
-    )
-    scale <- "global"
-  }
-  scale <- match.arg(scale, c("global", "local", "none"))
-  if (!is.null(scale_sm_xifti)) { stopifnot(ciftiTools::is.xifti(scale_sm_xifti)) }
-  stopifnot(is.numeric(scale_sm_FWHM) && length(scale_sm_FWHM)==1)
-  stopifnot(is.logical(normA) && length(normA)==1)
-
-  if (any(is.na(BOLD))) { stop("`NA` values in `BOLD` not supported with DR.") }
-  if (any(is.na(GICA))) { stop("`NA` values in `GICA` not supported with DR.") }
-
-  nV <- nrow(BOLD) #number of data locations
-  nT <- ncol(BOLD) #length of timeseries
-  if(nV < nT) warning('More time points than voxels. Are you sure?')
-  if(nV != nrow(GICA)) {
-    stop('The number of voxels in dat (', nV, ') and GICA (', nrow(GICA), ') must match')
-  }
-
-  nQ <- ncol(GICA) #number of ICs
-  if(nQ > nV) warning('More ICs than voxels. Are you sure?')
-  if(nQ > nT) warning('More ICs than time points. Are you sure?')
-
-  # Center each voxel timecourse. Do not center the image at each timepoint.
-  # Standardize scale if `scale`, and detrend if `detrend_DCT`.
-  # Transpose it: now `BOLD` is TxV.
-  BOLD <- t(norm_BOLD(
-    BOLD, center_rows=TRUE, center_cols=center_Bcols,
-    scale=scale, scale_sm_xifti=scale_sm_xifti, scale_sm_FWHM=scale_sm_FWHM,
-    detrend_DCT=detrend_DCT
-  ))
-
-  # Center each group IC across space. (Used to be a function argument.)
-  center_Gcols <- TRUE
-  if (center_Gcols) { GICA <- fMRItools::colCenter(GICA) }
-
-  # Estimate A (IC timeseries).
-  # We need to center `BOLD` across space because the linear model has no intercept.
-  A <- ((BOLD - rowMeans(BOLD, na.rm=TRUE)) %*% GICA) %*% chol2inv(chol(crossprod(GICA)))
-
-  # Center each subject IC timecourse across time.
-  # (Redundant. Since BOLD is column-centered, A is already column-centered.)
-  # A <- fMRItools::colCenter(A)
-
-  # Normalize each subject IC timecourse if `normA`.
-  if (normA) { A <- scale(A) }
-
-  # Check rank of `A`.
-  if (qr(A)$rank < ncol(A)) {
-    warning("DR has estimated an `A` matrix that is not full rank. This can happen when the number of group ICs approaches the number of volumes in the subject data. An error may occur in further calculations. This problem can be avoided by using a group ICA with fewer components, or by providing more volumes of data per subject.")
-  }
-
-  # Estimate S (IC maps).
-  # Don't worry about the intercept: `BOLD` and `A` are centered across time.
-  S <- solve(a=crossprod(A), b=crossprod(A, BOLD))
-
-  #return result
-  list(S = S, A = A)
-}
-
 #' Dual Regression wrapper
 #'
 #' Wrapper to \code{dual_reg} used by `estimate_template`. The format of `BOLD`
@@ -120,6 +15,8 @@ dual_reg <- function(
 #'  the first half will be the test data and the second half will be the retest data.
 #' @param GICA Group ICA maps as a (vectorized) numeric matrix
 #'  (\eqn{V \times Q}). Its columns will be centered.
+#' @param GICA_parc_table Is the GICA actually a parcellation? If so, provide
+#'  the parcellation table here. Default: \code{NULL}.
 #' @param keepA Keep the resulting \strong{A} matrices, or only return the \strong{S} matrices
 #'  (default)?
 #' @inheritParams scale_Param
@@ -139,15 +36,17 @@ dual_reg <- function(
 #'  To create a \code{"surf"} object from data, see
 #'  \code{\link[ciftiTools]{make_surf}}. The surfaces must be in the same
 #'  resolution as the \code{BOLD} data.
-#' @inheritParams detrend_DCT_Param
-#' @inheritParams center_Bcols_Param
-#' @inheritParams normA_Param
+#' @inheritParams TR_param
+#' @inheritParams hpf_param
+#' @inheritParams GSR_Param
 #' @param brainstructures Only applies if the entries of \code{BOLD} are CIFTI file paths.
 #'  Character vector indicating which brain structure(s)
 #'  to obtain: \code{"left"} (left cortical surface), \code{"right"} (right
 #'  cortical surface) and/or \code{"subcortical"} (subcortical and cerebellar
 #'  gray matter). Can also be \code{"all"} (obtain all three brain structures).
-#'  Default: \code{c("left","right")} (cortical surface only).
+#'  Default: \code{c("all")}.
+#' @param resamp_res Only applies if the entries of \code{BOLD} are CIFTI file paths.
+#'  Resample the data upon reading it in? Default: \code{NULL} (no resampling).
 #' @param mask Required if and only if the entries of \code{BOLD} are NIFTI file paths or
 #'  \code{"nifti"} objects. This is a brain map formatted as a binary array of the same
 #'  size as the fMRI data, with \code{TRUE} corresponding to in-mask voxels.
@@ -184,24 +83,28 @@ dual_reg <- function(
 #'  and \strong{A} matrices if \code{keepA}, or \code{NULL} if dual
 #'  regression was skipped due to too many masked data locations.
 #'
+#' @importFrom fMRItools dual_reg
+#'
 #' @keywords internal
 dual_reg2 <- function(
-  BOLD, BOLD2=NULL, 
+  BOLD, BOLD2=NULL,
   format=c("CIFTI", "xifti", "GIFTI", "gifti", "NIFTI", "nifti", "RDS", "data"),
-  GICA,
+  GICA, GICA_parc_table=NULL,
+  mask=NULL,
   keepA=FALSE,
-  scale=c("global", "local", "none"),
+  scale=c("local", "global", "none"),
   scale_sm_surfL=NULL, scale_sm_surfR=NULL, scale_sm_FWHM=2,
-  detrend_DCT=0,
-  center_Bcols=FALSE, normA=FALSE,
+  TR=NULL, hpf=.01,
+  GSR=FALSE,
   Q2=0, Q2_max=NULL, NA_limit=.1,
-  brainstructures=c("left", "right"), mask=NULL,
+  brainstructures="all", resamp_res=NULL,
   varTol=1e-6, maskTol=.1,
   verbose=TRUE){
 
   if (verbose) { extime <- Sys.time() }
 
   keepA <- as.logical(keepA); stopifnot(length(keepA)==1)
+  scale <- match.arg(scale, c("local", "global", "none"))
   # No other arg checks: check them before calling this function.
 
   # For `"xifti"` data for handling the medial wall and smoothing.
@@ -214,15 +117,24 @@ dual_reg2 <- function(
   retest <- !is.null(BOLD2)
   format <- match.arg(format, c("CIFTI", "xifti", "GIFTI", "gifti", "NIFTI", "nifti", "RDS", "data"))
   FORMAT <- get_FORMAT(format)
-  nQ <- ncol(GICA)
-  nI <- nV <- nrow(GICA)
-
   check_req_ifti_pkg(FORMAT)
 
+  GICA_parc <- !is.null(GICA_parc_table)
+  nQ <- if (GICA_parc) { nrow(GICA_parc_table) } else { ncol(GICA) }
+
+  if (is.null(mask)) {
+    nI <- nV <- nrow(GICA)
+  } else if (FORMAT=="NIFTI") {
+    nI <- dim(drop(mask))
+    nV <- sum(mask)
+  } else {
+    nI <- length(mask); nV <- sum(mask)
+  }
+
   # Get `BOLD` (and `BOLD2`) as a data matrix or array.  -----------------------
-  if (verbose) { cat("\tReading and formatting data...") }
+  if (verbose) { cat("\tReading in data... ") }
   if (FORMAT == "CIFTI") {
-    if (is.character(BOLD)) { BOLD <- ciftiTools::read_cifti(BOLD, brainstructures=brainstructures) }
+    if (is.character(BOLD)) { BOLD <- ciftiTools::read_cifti(BOLD, brainstructures=brainstructures, resamp_res=resamp_res) }
     if (ciftiTools::is.xifti(BOLD)) {
       if (scale == "local") {
         xii1 <- ciftiTools::convert_xifti(ciftiTools::select_xifti(BOLD, 1), "dscalar") * 0
@@ -231,11 +143,10 @@ dual_reg2 <- function(
     }
     stopifnot(is.matrix(BOLD))
     if (retest) {
-      if (is.character(BOLD2)) { BOLD2 <- ciftiTools::read_cifti(BOLD2, brainstructures=brainstructures) }
+      if (is.character(BOLD2)) { BOLD2 <- ciftiTools::read_cifti(BOLD2, brainstructures=brainstructures, resamp_res=resamp_res) }
       if (ciftiTools::is.xifti(BOLD2)) { BOLD2 <- as.matrix(BOLD2) }
       stopifnot(is.matrix(BOLD2))
     }
-    nI <- nV <- nrow(GICA)
   } else if (FORMAT == "GIFTI") {
     if (is.character(BOLD)) { BOLD <- gifti::readgii(BOLD) }
     stopifnot(gifti::is.gifti(BOLD))
@@ -269,7 +180,6 @@ dual_reg2 <- function(
       stopifnot(length(dim(BOLD2)) > 1)
     }
     stopifnot(!is.null(mask))
-    nI <- dim(drop(mask)); nV <- sum(mask)
   } else if (FORMAT == "MATRIX") {
     if (is.character(BOLD)) { BOLD <- readRDS(BOLD) }
     stopifnot(is.matrix(BOLD))
@@ -279,6 +189,7 @@ dual_reg2 <- function(
     }
     nI <- nV <- nrow(GICA)
   } else { stop() }
+
   dBOLD <- dim(BOLD)
   ldB <- length(dim(BOLD))
   nT <- dim(BOLD)[ldB]
@@ -301,26 +212,39 @@ dual_reg2 <- function(
       BOLD2 <- matrix(BOLD2[rep(as.logical(mask), dBOLD[ldB])], ncol=nT)
       stopifnot(nrow(BOLD2) == nV)
     }
+  } else if (!is.null(mask)) {
+    # Mask out the locations.
+    BOLD <- BOLD[mask,,drop=FALSE]
+    if (!is.null(xii1)) {
+      xiitmp <- as.matrix(xii1)
+      xiitmp[!mask,] <- NA
+      xii1 <- ciftiTools::move_to_mwall(ciftiTools::newdata_xifti(xii1, xiitmp))
+    }
+    nV <- nrow(BOLD)
+    if (retest) {
+      BOLD2 <- BOLD2[mask,,drop=FALSE]
+      stopifnot(nrow(BOLD2)==nV)
+    }
   }
 
   # Check for missing values. --------------------------------------------------
   nV0 <- nV # not used
-  mask <- make_mask(BOLD, varTol=varTol)
-  if (retest) { mask <- mask & make_mask(BOLD2, varTol=varTol) }
-  use_mask <- !all(mask)
-  if (use_mask) {
+  mask2 <- make_mask(BOLD, varTol=varTol)
+  if (retest) { mask2 <- mask2 & make_mask(BOLD2, varTol=varTol) }
+  use_mask2 <- !all(mask2)
+  if (use_mask2) {
     # Coerce `maskTol` to number of locations.
     stopifnot(is.numeric(maskTol) && length(maskTol)==1 && maskTol >= 0)
     if (maskTol < 1) { maskTol <- maskTol * nV }
     # Skip this scan if `maskTol` is surpassed.
-    if (sum(!mask) > maskTol) { return(NULL) }
+    if (sum(!mask2) > maskTol) { return(NULL) }
     # Mask out the locations.
-    BOLD <- BOLD[mask,,drop=FALSE]
-    GICA <- GICA[mask,,drop=FALSE]
-    if (retest) { BOLD2 <- BOLD2[mask,,drop=FALSE] }
+    BOLD <- BOLD[mask2,,drop=FALSE]
+    GICA <- GICA[mask2,,drop=FALSE]
+    if (retest) { BOLD2 <- BOLD2[mask2,,drop=FALSE] }
     if (!is.null(xii1)) {
       xiitmp <- as.matrix(xii1)
-      xiitmp[!mask,] <- NA
+      xiitmp[!mask2,] <- NA
       xii1 <- ciftiTools::move_to_mwall(ciftiTools::newdata_xifti(xii1, xiitmp))
     }
     nV <- nrow(BOLD)
@@ -332,6 +256,11 @@ dual_reg2 <- function(
       S2[,mask] <- S
       S2
     }
+    unmask_vec <- function(vec, mask) {
+      vec2 <- rep(NA, length(mask))
+      vec2[mask] <- vec
+      vec2
+    }
   }
 
   if (!is.null(xii1) && scale=="local" && scale_sm_FWHM > 0) {
@@ -340,24 +269,36 @@ dual_reg2 <- function(
 
   # Helper functions
   this_norm_BOLD <- function(B){ norm_BOLD(
-    B, center_rows=TRUE, center_cols=center_Bcols,
+    B, center_rows=TRUE, center_cols=GSR,
     scale=scale, scale_sm_xifti=xii1, scale_sm_FWHM=scale_sm_FWHM,
-    detrend_DCT=detrend_DCT
+    TR=TR, hpf=hpf
   ) }
 
-  dual_reg_yesNorm <- function(B){ dual_reg(
-    B, GICA,
+  DR_FUN <- if (GICA_parc) {
+    function(...) { fMRItools::dual_reg_parc(parc=GICA, ...) }
+  } else {
+    # Do twice to get timecourse estimate w/ subject maps, rather than w/ GICA (`A2`)
+    function(GICA, parc_vals, ...) {
+      out <- fMRItools::dual_reg(GICA=GICA, ...)
+      GICA <- t(out$S)
+      out$A2 <- fMRItools::dual_reg(GICA=GICA, ...)$A
+      out
+    }
+  }
+
+  dual_reg_yesNorm <- function(B){ DR_FUN(
+    B, GICA=GICA, parc_vals=GICA_parc_table$Key,
     scale=scale, scale_sm_xifti=xii1, scale_sm_FWHM=scale_sm_FWHM,
-    detrend_DCT=detrend_DCT, center_Bcols=center_Bcols, normA=normA
+    TR=TR, hpf=hpf, GSR=GSR
   ) }
 
-  dual_reg_noNorm <- function(B){ dual_reg(
-    B, GICA,
-    scale="none", detrend_DCT=0, center_Bcols=FALSE, normA=normA
+  dual_reg_noNorm <- function(B){ DR_FUN(
+    B, GICA=GICA, parc_vals=GICA_parc_table$Key,
+    scale="none", hpf=0, GSR=FALSE
   ) }
 
   # Get the first dual regression results. -------------------------------------
-  if (verbose) { cat(" Computing DR...") }
+  if (verbose) { cat("\n\tDual regression... ") }
   # If using pseudo-retest data, compute DR on the halves of `BOLD`.
   # Do this before normalizating `BOLD` so to avoid normalizing twice.
   if (!retest) {
@@ -374,23 +315,29 @@ dual_reg2 <- function(
     out$retest <- dual_reg_noNorm(BOLD2)
   }
 
+  BOLDss <- list(
+    test = if (!retest) { BOLD[, part1, drop=FALSE] } else { BOLD },
+    retest = if (!retest) { BOLD[, part2, drop=FALSE] } else { BOLD2 }
+  )
+  BOLDss$test_preclean <- BOLDss$test
+  BOLDss$retest_preclean <- BOLDss$retest
+
   # Return these DR results if denoising is not needed. ------------------------
   if ((!is.null(Q2) && Q2==0) || (!is.null(Q2_max) && Q2_max==0)) {
-    if (!keepA) {
-      out$test$A <- NULL
-      out$retest$A <- NULL
+    for (sess in c("test", "retest")) {
+      out[[sess]]$sigma_sq <- colSums((out[[sess]]$A %*% out[[sess]]$S - t(BOLDss[[sess]]))^2)/nT # part inside colSums() is TxV
+      if (use_mask2) { out[[sess]]$sigma_sq <- unmask_vec(out[[sess]]$sigma_sq, mask2) }
+      if (!keepA) { out[[sess]]$A <- NULL; out[[sess]]$A2 <- NULL }
+      if (use_mask2) { out[[sess]]$S <- unmask(out[[sess]]$S, mask2) }
     }
-    if (use_mask) {
-      out$test$S <- unmask(out$test$S, mask)
-      out$retest$S <- unmask(out$retest$S, mask)
-    }
+
     if (verbose) { cat(" Done!\n") }
     if (verbose) { print(Sys.time() - extime) }
     return(out)
   }
 
   # Estimate and deal with nuisance ICs. ---------------------------------------
-  if (verbose) { cat(" Denoising...") }
+  if (verbose) { cat(" Denoising... ") }
   # If !retest, we prefer to estimate nuisance ICs across the full scan
   # and then halve it after.
   if (!retest) {
@@ -407,36 +354,33 @@ dual_reg2 <- function(
 
   # Center and scale `BOLD` and `BOLD2` (again), but do not detrend again. -----
   BOLD <- norm_BOLD(
-    BOLD, center_rows=TRUE, center_cols=center_Bcols,
+    BOLD, center_rows=TRUE, center_cols=GSR,
     scale=scale, scale_sm_xifti=xii1, scale_sm_FWHM=scale_sm_FWHM,
-    detrend_DCT=0
+    TR=TR, hpf=0
   )
   BOLD2 <- norm_BOLD(
-    BOLD2, center_rows=TRUE, center_cols=center_Bcols,
+    BOLD2, center_rows=TRUE, center_cols=GSR,
     scale=scale, scale_sm_xifti=xii1, scale_sm_FWHM=scale_sm_FWHM,
-    detrend_DCT=0
+    TR=TR, hpf=0
   )
 
   # Do DR again. ---------------------------------------------------------------
-  if (verbose) { cat(" Computing DR again...") }
+  if (verbose) { cat("\n\tDual regression again... ") }
+
+  BOLDss <- list(test = BOLD, retest = BOLD2)
+  BOLDss$test_preclean <- BOLDss$test
+  BOLDss$retest_preclean <- BOLDss$retest
 
   out$test_preclean <- out$test
   out$test <- dual_reg_noNorm(BOLD)
   out$retest_preclean <- out$retest
   out$retest <- dual_reg_noNorm(BOLD2)
 
-  if (!keepA) {
-    out$test_preclean$A <- NULL
-    out$test$A <- NULL
-    out$retest_preclean$A <- NULL
-    out$retest$A <- NULL
-  }
-
-  if (use_mask) {
-    out$test_preclean$S <- unmask(out$test_preclean$S, mask)
-    out$retest_preclean$S <- unmask(out$retest_preclean$S, mask)
-    out$test$S <- unmask(out$test$S, mask)
-    out$retest$S <- unmask(out$retest$S, mask)
+  for (sess in c("test", "retest", "test_preclean", "retest_preclean")) {
+    out[[sess]]$sigma_sq <- colSums((out[[sess]]$A %*% out[[sess]]$S - t(BOLDss[[sess]]))^2)/nT # part inside colSums() is TxV
+    if (use_mask2) { out[[sess]]$sigma_sq <- unmask_vec(out[[sess]]$sigma_sq, mask2) }
+    if (!keepA) { out[[sess]]$A <- NULL; out[[sess]]$A2 <- NULL }
+    if (use_mask2) { out[[sess]]$S <- unmask(out[[sess]]$S, mask2) }
   }
 
   if (verbose) { cat(" Done!\n") }

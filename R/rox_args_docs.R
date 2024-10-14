@@ -1,19 +1,27 @@
-#' detrend_DCT
+#' TR
 #' 
-#' @param detrend_DCT Detrend the data? This is an integer number of DCT bases
-#'  to use for detrending. If \code{0} (default), do not detrend.
+#' @param TR The temporal resolution of the data, i.e. the time between volumes,
+#'  in seconds. \code{TR} is required for detrending with \code{hpf}.
 #' 
-#' @name detrend_DCT_Param
+#' @name TR_param
 #' @keywords internal
 NULL
 
-#' normA
+#' hpf
 #' 
-#' @param normA Scale each IC timeseries (column of \eqn{A}) in the dual
-#'  regression estimates? Default: \code{FALSE} (not recommended). Note that the
-#'  product \eqn{A \times S} remains the same with either option.
+#' @param hpf The frequency at which to apply a highpass filter to the data
+#'  during pre-processing, in Hertz. Default: \code{0.01} Hertz. Set to \code{0}
+#'  to disable the highpass filter.
 #' 
-#' @name normA_Param
+#' 
+#'  The highpass filter serves to detrend the data, since low-frequency 
+#'  variance is associated with noise. Highpass filtering is accomplished by 
+#'  nuisance regression of discrete cosine transform (DCT) bases. 
+#' 
+#'  Note the \code{TR} argument is required for highpass filtering. If
+#'  \code{TR} is not provided, \code{hpf} will be ignored.
+#' 
+#' @name hpf_param
 #' @keywords internal
 NULL
 
@@ -31,21 +39,21 @@ NULL
 
 #' scale
 #' 
-#' @param scale \code{"global"} (default), \code{"local"}, or \code{"none"}.
-#'  Global scaling will divide the entire data matrix by the mean image standard 
-#'  deviation (\code{mean(sqrt(rowVars(BOLD)))}). Local scaling will divide each
-#'  data location's time series by its estimated standard deviation. 
+#' @param scale \code{"local"} (default), \code{"global"}, or \code{"none"}.
+#'  Local scaling will divide each data location's time series by its estimated 
+#'  standard deviation. Global scaling will divide the entire data matrix by the 
+#'  mean image standard deviation (\code{mean(sqrt(rowVars(BOLD)))}). 
 #' 
 #' @name scale_Param
 #' @keywords internal
 NULL
 
-#' center_Bcols
+#' GSR
 #' 
-#' @param center_Bcols Center BOLD across columns (each image)? This
+#' @param GSR Center BOLD across columns (each image)? This
 #'  is equivalent to performing global signal regression. Default: 
 #'  \code{FALSE}. 
 #' 
-#' @name center_Bcols_Param
+#' @name GSR_Param
 #' @keywords internal
 NULL
