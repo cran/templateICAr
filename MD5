@@ -1,6 +1,6 @@
-d4fbf70f2f06dd01f11481806c77234a *DESCRIPTION
+49ed3e4e6b78701ef85c72fff8d3a8bf *DESCRIPTION
 6dc91fa08eb1d959db98afd4fc57c265 *NAMESPACE
-3c6fb60929b1cd9f72b2db7d329648f3 *NEWS.md
+5b1c23e4c777d99b54025bf08dc1715b *NEWS.md
 3361d532273c2db4bd3cdbd058c78a81 *R/EM_templateICA.R
 4c27b7eff98fa0351f6358140a76d366 *R/INLA_check.R
 9cee1b46c13047f15bfcc4e9b66d2c76 *R/VB_FCtemplateICA.R
@@ -9,9 +9,9 @@ ab578260bca948c1fc444de78656d3fa *R/activations.R
 aa029c5d47aa3449a1c988ee9451e921 *R/activations_utils.R
 253b0b10fc3ad0e2ee0ea80ddc413b36 *R/check_parallel_packages.R
 30ebd258bb4dd9acc6050e8114e6d403 *R/dim_reduce.R
-7d0ad2b97709a498d1d453950e3b7ced *R/dual_reg2.R
-99c2aa1727e72e89492ea41858c442df *R/estimate_template.R
-ffb16465dc504126f4e66511278802ac *R/estimate_template.methods.R
+71bc6676b808affd5307c220f36943c0 *R/dual_reg2.R
+a782363c4f3a197da87d89ad7ed2ed77 *R/estimate_template.R
+1727307b57c76a07fef2f72b19fbf440 *R/estimate_template.methods.R
 4be5fb15864bc26a0c5b1d24149ddd4d *R/estimate_template.utils.R
 02c7b7b7caf8a7159f17b3c013e29f19 *R/export_template.R
 b5f45bcb090a3189a5d3c466437b7e38 *R/groupICA.R
@@ -22,7 +22,7 @@ a1708ee9563314524364e6b45709c598 *R/orthonorm.R
 76c3bde91df39cc86a381bbbcfce6562 *R/resample_template.R
 a4afad07eed997c2f7aa45f35cb2af98 *R/rm_nuisIC.R
 8fd969b068f7122a029bcf45aa337b05 *R/rox_args_docs.R
-b5940b3ff75f4c3649c1c15d67e1719c *R/templateICA.R
+eab4802cf029a27e1d5836262c72c00e *R/templateICA.R
 c6b66b2d557726814463ef6a30cedd31 *R/templateICA.methods.R
 2cabb3d96bb04211487f057511dd2d55 *R/utils.R
 de11464b39b54ee1afeb09c76b9bc98d *README.md
@@ -57,7 +57,7 @@ fb6aaf7f2c6369cc95baa647be51280b *man/dim_reduce.Rd
 fe5e1321203e009edfda558f72a284b0 *man/estimate.ESS.Rd
 63ac5215d685f7a47e64f4b851b98d06 *man/estimate_nu.Rd
 fda6141f9f72fdd2aab767c5fe6227c7 *man/estimate_nu_matrix.Rd
-e95582d7bfb9e2692ef747a662c8d2e9 *man/estimate_template.Rd
+c59755a0676b27b1b26c7105510223bd *man/estimate_template.Rd
 9cb9b6dfab5462d95bceef092bb73a60 *man/estimate_template_FC.Rd
 40c6f63bb5ecd1e98273bdf03863173b *man/estimate_template_from_DR.Rd
 eed5f8f57a543f06bf727c8962e89544 *man/estimate_template_from_DR_two.Rd
@@ -101,7 +101,7 @@ ab0141d7ab0c23384809cd62c144ff2d *man/summary.tICA.nifti.Rd
 303f3638b9694114c2a7e4ee9fb93552 *man/summary.template.gifti.Rd
 88cd178f4426e9906fe3d06067d768ec *man/summary.template.matrix.Rd
 5113e86477db64317dd5ac520dadd470 *man/summary.template.nifti.Rd
-6ada524b537a5a687f64f7a6e09e7691 *man/templateICA.Rd
+c92eade2b38323a2be889c5dc5a5781d *man/templateICA.Rd
 cdf41cf1d203dfba1ea0e714c3d64474 *man/update_A.Rd
 6ec715fad623573d11cbbb377f5e5de6 *man/update_A_Chol.Rd
 cdfc43876a64f311469d332595481d85 *man/update_S.Rd
@@ -109,6 +109,6 @@ ca82625626b35509b5d69a9a0be6a74c *man/update_tau2.Rd
 6260a82490545f3a26c1dcf812f819a0 *man/varTol_Param.Rd
 0a3c0b81932b2711984986467cc09b7f *man/var_sq_err.Rd
 eb803235c2ba07a7e0687823f1a50054 *man/var_sq_err_constrained.Rd
-8272ad74c0aadcffc37e2aef164bb8bd *tests/run_templateICAr_tests.R
+3ea06cc1f6630770169836b0c60847a6 *tests/run_templateICAr_tests.R
 8dcef2aa3bd0bc3c08a4c42487dc83b4 *tests/testthat.R
 7c3734b0f519aed7bc649b33fcaec979 *tests/testthat/test-misc.R
